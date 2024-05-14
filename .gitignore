@@ -1,0 +1,4 @@
+scp-files.sh
+ssh_private_key
+/your-folder/
+/src/.env

@@ -4,13 +4,27 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, to_json, col, lit, struct
 from pyspark.sql.types import StructType, StructField, StringType, LongType
 
-TOPIC_NAME_IN = 'student.topic.cohort22.damirkalin_ini'
-TOPIC_NAME_OUT = 'student.topic.cohort22.damirkalin_outo'
+from get_env import GetEnv
+
+envs = GetEnv()
+
+PG_HOST = envs.get_env('PG_HOST')
+PG_PORT = envs.get_env('PG_PORT')
+PG_DB = envs.get_env('PG_DB')
+PG_USER = envs.get_env('PG_USER')
+PG_PWD = envs.get_env('PG_PWD')
+KAFKA_SECURITY_PROTOCOL = envs.get_env('KAFKA_SECURITY_PROTOCOL')
+KAFKA_SASL_MECHANISM = envs.get_env('KAFKA_SASL_MECHANISM')
+KAFKA_SERVER = envs.get_env('KAFKA_SERVER')
+KAFKA_USER = envs.get_env('KAFKA_USER')
+KAFKA_PWD = envs.get_env('KAFKA_PWD')
+TOPIC_NAME_IN = envs.get_env('TOPIC_NAME_IN')
+TOPIC_NAME_OUT = envs.get_env('TOPIC_NAME_OUT')
 
 kafka_security_options = {
-    'kafka.security.protocol': 'SASL_SSL',
-    'kafka.sasl.mechanism': 'SCRAM-SHA-512',
-    'kafka.sasl.jaas.config': 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"de-student\" password=\"ltcneltyn\";'
+    'kafka.security.protocol': KAFKA_SECURITY_PROTOCOL,
+    'kafka.sasl.mechanism': KAFKA_SASL_MECHANISM,
+    'kafka.sasl.jaas.config': f'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"{KAFKA_USER}\" password=\"{KAFKA_PWD}\";'
 }
 
 # необходимые библиотеки для интеграции Spark с Kafka и PostgreSQL
@@ -29,10 +43,10 @@ def foreach_batch_function(df, epoch_id):
     df.write \
         .format("jdbc") \
         .option('driver', 'org.postgresql.Driver') \
-        .option("url", "jdbc:postgresql://localhost:5432/de") \
+        .option("url", f"jdbc:postgresql://{PG_HOST}:{PG_PORT}/{PG_DB}") \
         .option("dbtable", "public.subscribers_feedback") \
-        .option("user", "jovyan") \
-        .option("password", "jovyan") \
+        .option("user", PG_USER) \
+        .option("password", PG_PWD) \
         .mode("append") \
         .save()
     # создаём df для отправки в Kafka. Сериализация в json.
@@ -52,7 +66,7 @@ def foreach_batch_function(df, epoch_id):
     # отправляем сообщения в результирующий топик Kafka без поля feedback
     df.write\
         .format("kafka")\
-        .option('kafka.bootstrap.servers', 'rc1b-2erh7b35n4j4v869.mdb.yandexcloud.net:9091') \
+        .option('kafka.bootstrap.servers', KAFKA_SERVER) \
         .options(**kafka_security_options)\
         .option("topic", TOPIC_NAME_OUT)\
         .save()
@@ -70,7 +84,7 @@ spark = SparkSession.builder \
 # читаем из топика Kafka сообщения с акциями от ресторанов 
 restaurant_read_stream_df = spark.readStream \
     .format('kafka') \
-    .option('kafka.bootstrap.servers', 'rc1b-2erh7b35n4j4v869.mdb.yandexcloud.net:9091') \
+    .option('kafka.bootstrap.servers', KAFKA_SERVER) \
     .options(**kafka_security_options) \
     .option('subscribe', TOPIC_NAME_IN) \
     .load()
@@ -117,11 +131,11 @@ filtered_read_stream_df = (restaurant_read_stream_df
 # вычитываем всех пользователей с подпиской на рестораны
 subscribers_restaurant_df = spark.read \
                     .format('jdbc') \
-                    .option('url', 'jdbc:postgresql://localhost:5432/de') \
+                    .option('url', f'jdbc:postgresql://{PG_HOST}:{PG_PORT}/{PG_DB}') \
                     .option('driver', 'org.postgresql.Driver') \
                     .option('dbtable', 'subscribers_restaurants') \
-                    .option('user', 'jovyan') \
-                    .option('password', 'jovyan') \
+                    .option('user', PG_USER) \
+                    .option('password', PG_PWD) \
                     .load()
 
 # джойним данные из сообщения Kafka с пользователями подписки по restaurant_id (uuid). Добавляем время создания события.

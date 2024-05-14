@@ -6,7 +6,16 @@ from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql import functions as f
 from pyspark.sql.types import StructType, StructField, DoubleType, StringType, TimestampType, IntegerType
 
-TOPIC_NAME_IN = 'student.topic.cohort22.damirkalin_ini'
+from get_env import GetEnv
+
+envs = GetEnv()
+
+KAFKA_SECURITY_PROTOCOL = envs.get_env('KAFKA_SECURITY_PROTOCOL')
+KAFKA_SASL_MECHANISM = envs.get_env('KAFKA_SASL_MECHANISM')
+KAFKA_SERVER = envs.get_env('KAFKA_SERVER')
+KAFKA_USER = envs.get_env('KAFKA_USER')
+KAFKA_PWD = envs.get_env('KAFKA_PWD')
+TOPIC_NAME_IN = envs.get_env('TOPIC_NAME_IN')
 USER_ID = 'e4567-e89b-12d3-a456-426614174003'
 
 packages = ["org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0", "org.postgresql:postgresql:42.4.0"]
@@ -18,9 +27,9 @@ contents = ['Action: free burger', 'Action: beer two for the price of one', '50 
 
 
 kafka_security_options = {
-    'kafka.security.protocol': 'SASL_SSL',
-    'kafka.sasl.mechanism': 'SCRAM-SHA-512',
-    'kafka.sasl.jaas.config': 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"de-student\" password=\"ltcneltyn\";'
+    'kafka.security.protocol': KAFKA_SECURITY_PROTOCOL,
+    'kafka.sasl.mechanism': KAFKA_SASL_MECHANISM,
+    'kafka.sasl.jaas.config': f'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"{KAFKA_USER}\" password=\"{KAFKA_PWD}\";'
 }
 
 def spark_init(test_name) -> SparkSession:
@@ -61,14 +70,13 @@ def create_dataframe(spark, count_rows):
     
 
 def run_query(df):
-    df\
-            .write\
-            .format("kafka")\
-            .option('kafka.bootstrap.servers', 'rc1b-2erh7b35n4j4v869.mdb.yandexcloud.net:9091')\
-            .options(**kafka_security_options)\
-            .option("topic", TOPIC_NAME_IN)\
-            .option("checkpointLocation", "test_query")\
-            .save()
+    df.write\
+        .format("kafka")\
+        .option('kafka.bootstrap.servers', KAFKA_SERVER)\
+        .options(**kafka_security_options)\
+        .option("topic", TOPIC_NAME_IN)\
+        .option("checkpointLocation", "test_query")\
+        .save()
 
 
 def main():
